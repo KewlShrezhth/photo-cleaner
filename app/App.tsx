@@ -30,7 +30,7 @@ const SIZE = (Dimensions.get('window').width - GAP * (COLS + 1)) / COLS;
 
 type Mode = 'date' | 'place';
 type Group = { label: string; photos: Photo[]; keepIds: Set<string>; notes: Record<string, string> };
-type Result = { judged: boolean; groups: Group[]; leftovers: Photo[] };
+type Result = { judged: boolean; groups: Group[]; leftovers: Photo[]; keptLeftovers: Set<string> };
 type Screen = 'pick' | 'working' | 'result';
 
 function DateField({
@@ -204,12 +204,17 @@ export default function App() {
       setResult({
         judged: a.judged,
         leftovers: a.leftovers.map((i) => chosen[i]),
-        groups: a.groups.map((g) => ({
-          label: g.label,
-          photos: g.members.map((i) => chosen[i]),
-          keepIds: new Set(g.keep.map((i) => chosen[i].id)),
-          notes: Object.fromEntries(Object.entries(g.notes).map(([i, n]) => [chosen[Number(i)].id, n])),
-        })),
+        keptLeftovers: new Set(),
+        groups: a.groups.map((g) => {
+          const keepIds = new Set(g.keep.map((i) => chosen[i].id));
+          return {
+            label: g.label,
+            // Picks first. Sorted once here, so a photo doesn't jump when the user changes its pick.
+            photos: g.members.map((i) => chosen[i]).sort((x, y) => Number(keepIds.has(y.id)) - Number(keepIds.has(x.id))),
+            keepIds,
+            notes: Object.fromEntries(Object.entries(g.notes).map(([i, n]) => [chosen[Number(i)].id, n])),
+          };
+        }),
       });
       setScreen('result');
     } catch (e: any) {
@@ -218,12 +223,29 @@ export default function App() {
     }
   }
 
-  // Nothing is ever deleted. Everything that is not a kept pick (the extra shots and the one-offs) goes to the Archive album.
+  // The user can override any pick: tap a photo to flip it between keep and archive. group is null for the one-offs.
+  function toggleKeep(group: number | null, id: string) {
+    if (isIOS) Haptics.selectionAsync();
+    const flip = (s: Set<string>) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    };
+    setResult((r) =>
+      !r
+        ? r
+        : group === null
+          ? { ...r, keptLeftovers: flip(r.keptLeftovers) }
+          : { ...r, groups: r.groups.map((g, i) => (i === group ? { ...g, keepIds: flip(g.keepIds) } : g)) }
+    );
+  }
+
+  // Nothing is ever deleted. Everything that is not kept (the extra shots and the one-offs) goes to the Archive album.
   async function archiveRest() {
     if (!result) return;
     const ids = [
       ...result.groups.flatMap((g) => g.photos.filter((p) => !g.keepIds.has(p.id)).map((p) => p.id)),
-      ...result.leftovers.map((p) => p.id),
+      ...result.leftovers.filter((p) => !result.keptLeftovers.has(p.id)).map((p) => p.id),
     ];
     if (demo) {
       notify('Demo mode', 'Sample photos are not on your phone, so nothing was archived');
@@ -274,32 +296,41 @@ export default function App() {
   }
 
   if (screen === 'result' && result) {
-    const { groups, leftovers } = result;
-    const keepTotal = groups.reduce((n, g) => n + g.keepIds.size, 0);
-    const archiveCount = groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0) + leftovers.length;
+    const { groups, leftovers, keptLeftovers } = result;
+    const keepTotal = groups.reduce((n, g) => n + g.keepIds.size, 0) + keptLeftovers.size;
+    const archiveCount =
+      groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0) + leftovers.length - keptLeftovers.size;
     const caps = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-    const strip = (photos: Photo[], keepIds: Set<string> | null) => (
+    // group is null for the one-offs, which stay undimmed because archiving them is the default.
+    const strip = (photos: Photo[], keepIds: Set<string>, group: number | null) => (
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
-        data={keepIds ? [...photos].sort((a, b) => Number(keepIds.has(b.id)) - Number(keepIds.has(a.id))) : photos}
+        data={photos}
+        extraData={keepIds}
         keyExtractor={(p) => p.id}
         contentContainerStyle={{ gap: 8 }}
         renderItem={({ item }) => {
-          const kept = !!keepIds?.has(item.id);
+          const kept = keepIds.has(item.id);
           return (
-            <View style={{ opacity: keepIds && !kept ? 0.55 : 1 }}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: kept }}
+              accessibilityLabel={kept ? 'Kept photo' : group === null ? 'One-off photo to archive' : 'Photo to archive'}
+              accessibilityHint={kept ? 'Double tap to archive it instead' : 'Double tap to keep it instead'}
+              onPress={() => toggleKeep(group, item.id)}
+              style={{ opacity: group !== null && !kept ? 0.55 : 1 }}
+            >
               <Image
                 source={{ uri: item.uri }}
-                accessibilityLabel={kept ? 'Kept photo' : keepIds ? 'Photo to archive' : 'One-off photo to archive'}
-                style={{ width: 92, height: 92, borderRadius: isIOS ? 12 : 12, borderWidth: kept ? 3 : 0, borderColor: t.keep }}
+                style={{ width: 92, height: 92, borderRadius: 12, borderWidth: kept ? 3 : 0, borderColor: t.keep }}
               />
               {kept && (
                 <View style={[styles.check, { backgroundColor: t.keep, right: 6, top: 6 }]}>
                   <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -324,7 +355,8 @@ export default function App() {
             <View style={styles.pad}>
               {title('Your best')}
               <Text style={{ color: t.subtext }}>
-                {groups.length} situation{groups.length === 1 ? '' : 's'} found. Keeping {keepTotal}, archiving {archiveCount}.
+                {groups.length} situation{groups.length === 1 ? '' : 's'} found. Keeping {keepTotal}, archiving {archiveCount}.{' '}
+                Tap a photo to keep or archive it.
               </Text>
               {demo ? (
                 !isIOS ? <StatusChip kind="info" label="Demo ranking, not AI" /> : <Text style={{ color: t.subtext }}>(Demo ranking, not AI)</Text>
@@ -333,12 +365,12 @@ export default function App() {
               ) : null}
             </View>
           }
-          renderItem={({ item: g }) => {
-            const bestNote = g.notes[[...g.keepIds][0]];
+          renderItem={({ item: g, index }) => {
+            const bestNote = g.photos.map((p) => g.keepIds.has(p.id) && g.notes[p.id]).find(Boolean);
             return card(
               caps(g.label),
               `${g.photos.length} photos · keeping ${g.keepIds.size}`,
-              strip(g.photos, g.keepIds),
+              strip(g.photos, g.keepIds, index),
               bestNote ? `Best: ${bestNote}` : undefined
             );
           }}
@@ -346,8 +378,8 @@ export default function App() {
             leftovers.length
               ? card(
                   'Archive',
-                  `${leftovers.length} one-off photo${leftovers.length === 1 ? '' : 's'}`,
-                  strip(leftovers, null),
+                  `${leftovers.length} one-off photo${leftovers.length === 1 ? '' : 's'}${keptLeftovers.size ? ` · keeping ${keptLeftovers.size}` : ''}`,
+                  strip(leftovers, keptLeftovers, null),
                   isIOS
                     ? 'These match nothing else. They are added to an Archive album, nothing is deleted.'
                     : 'These match nothing else. They are moved to an Archive album, nothing is deleted.'
