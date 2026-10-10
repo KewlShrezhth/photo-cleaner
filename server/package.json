@@ -6,7 +6,7 @@
     "start": "node --env-file=.env index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "latest",
+    "@anthropic-ai/sdk": "^0.132.1",
     "@huggingface/transformers": "^4.3.1",
     "sharp": "^0.35.5"
   }
