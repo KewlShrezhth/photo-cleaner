@@ -301,7 +301,7 @@ export default function App() {
     const archiveCount =
       groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0) + leftovers.length - keptLeftovers.size;
     const caps = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-    // group is null for the one-offs, which stay undimmed because archiving them is the default.
+    // group is null for the one-offs. Photos marked to archive are dimmed.
     const strip = (photos: Photo[], keepIds: Set<string>, group: number | null) => (
       <FlatList
         horizontal
@@ -319,7 +319,7 @@ export default function App() {
               accessibilityLabel={kept ? 'Kept photo' : group === null ? 'One-off photo to archive' : 'Photo to archive'}
               accessibilityHint={kept ? 'Double tap to archive it instead' : 'Double tap to keep it instead'}
               onPress={() => toggleKeep(group, item.id)}
-              style={{ opacity: group !== null && !kept ? 0.55 : 1 }}
+              style={{ opacity: kept ? 1 : 0.55 }}
             >
               <Image
                 source={{ uri: item.uri }}
