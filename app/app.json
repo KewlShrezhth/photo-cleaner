@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Photo Cleaner",
+    "slug": "photo-cleaner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.photocleaner.app"
+    },
+    "android": {
+      "package": "com.photocleaner.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Photo Cleaner reads your photos so it can find the best ones.",
+          "savePhotosPermission": "Photo Cleaner needs access to move the photos you choose into an Archive album.",
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["photo"]
+        }
+      ]
+    ]
+  }
+}

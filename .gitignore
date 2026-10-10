@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.expo/
+dist/
+*.log
+.DS_Store
+
+# demo photos (AI-generated test images), kept local only
+app/assets/samples/
