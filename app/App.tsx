@@ -218,13 +218,10 @@ export default function App() {
     }
   }
 
-  // Nothing is ever deleted. Everything that is not a kept pick (the extra shots and the one-offs) goes to the Archive album.
+  // Nothing is ever deleted. Only the extra shots in a group go to the Archive album; one-offs have nothing to compete with, so they are kept.
   async function archiveRest() {
     if (!result) return;
-    const ids = [
-      ...result.groups.flatMap((g) => g.photos.filter((p) => !g.keepIds.has(p.id)).map((p) => p.id)),
-      ...result.leftovers.map((p) => p.id),
-    ];
+    const ids = result.groups.flatMap((g) => g.photos.filter((p) => !g.keepIds.has(p.id)).map((p) => p.id));
     if (demo) {
       notify('Demo mode', 'Sample photos are not on your phone, so nothing was archived');
       return;
@@ -275,8 +272,8 @@ export default function App() {
 
   if (screen === 'result' && result) {
     const { groups, leftovers } = result;
-    const keepTotal = groups.reduce((n, g) => n + g.keepIds.size, 0);
-    const archiveCount = groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0) + leftovers.length;
+    const keepTotal = groups.reduce((n, g) => n + g.keepIds.size, 0) + leftovers.length;
+    const archiveCount = groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0);
     const caps = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     const strip = (photos: Photo[], keepIds: Set<string> | null) => (
       <FlatList
@@ -291,7 +288,7 @@ export default function App() {
             <View style={{ opacity: keepIds && !kept ? 0.55 : 1 }}>
               <Image
                 source={{ uri: item.uri }}
-                accessibilityLabel={kept ? 'Kept photo' : keepIds ? 'Photo to archive' : 'One-off photo to archive'}
+                accessibilityLabel={kept ? 'Kept photo' : keepIds ? 'Photo to archive' : 'One-off photo, kept'}
                 style={{ width: 92, height: 92, borderRadius: isIOS ? 12 : 12, borderWidth: kept ? 3 : 0, borderColor: t.keep }}
               />
               {kept && (
@@ -345,12 +342,10 @@ export default function App() {
           ListFooterComponent={
             leftovers.length
               ? card(
-                  'Archive',
+                  'Kept as is',
                   `${leftovers.length} one-off photo${leftovers.length === 1 ? '' : 's'}`,
                   strip(leftovers, null),
-                  isIOS
-                    ? 'These match nothing else. They are added to an Archive album, nothing is deleted.'
-                    : 'These match nothing else. They are moved to an Archive album, nothing is deleted.'
+                  'These match nothing else, so there is nothing better to keep instead. They stay where they are.'
                 )
               : null
           }
