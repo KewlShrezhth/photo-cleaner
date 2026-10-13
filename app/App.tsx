@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  StatusBar as SystemBar,
   StyleSheet,
   Text,
   TextInput,
@@ -256,6 +257,11 @@ export default function App() {
 
   if (!welcomed) return <Welcome onDone={() => setWelcomed(true)} />;
 
+  // Android draws the app under the status bar; this strip keeps scrolled content from showing through the clock.
+  const scrim = !isIOS && (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: SystemBar.currentHeight ?? 0, backgroundColor: t.bg, zIndex: 10, elevation: 10 }} />
+  );
+
   if (screen === 'working') {
     return (
       <SafeAreaView style={[styles.fill, styles.center, { backgroundColor: t.bg }]}>
@@ -315,7 +321,7 @@ export default function App() {
     );
     return (
       <SafeAreaView style={[styles.fill, { backgroundColor: t.bg }]}>
-        <StatusBar style="auto" />
+        <StatusBar style="auto" />{scrim}
         <FlatList
           key="results"
           data={groups}
@@ -365,7 +371,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: t.bg }]}>
-      <StatusBar style="auto" />
+      <StatusBar style="auto" />{scrim}
       <FlatList
         key="pick"
         data={photos}
