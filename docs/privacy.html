@@ -1,0 +1,41 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Cleaner Privacy</title>
+<style>
+  :root { --bg: #fff; --fg: #1d1b20; --muted: #49454f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #141218; --fg: #e6e0e9; --muted: #cac4d0; } }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; max-width: 680px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 28px; margin-bottom: 0; } h2 { font-size: 19px; margin-top: 32px; } p, li { color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>Photo Cleaner Privacy Policy</h1>
+<p>Last updated: October 12, 2026</p>
+
+<p>Photo Cleaner finds the best photos among similar shots and moves the extras into an Archive album. This page explains what happens to your data.</p>
+
+<h2>Photos</h2>
+<ul>
+  <li>The app reads the photos you choose, by date, by place or by picking them yourself.</li>
+  <li>To compare them, it sends small, low-resolution copies (about 384 pixels wide) to the Photo Cleaner server. These copies contain no location or camera data.</li>
+  <li>The server analyses the copies in memory and returns the result. It does not store them, and they are not used to train any AI model.</li>
+  <li>For close calls, the server may send a few of these copies to Anthropic's Claude AI to pick the best one. Anthropic does not use this data to train its models.</li>
+  <li>Your original photos never leave your phone.</li>
+</ul>
+
+<h2>Archiving</h2>
+<p>Photo Cleaner never deletes photos. It only moves the extra shots you confirm into an album called "Photo Cleaner Archive" on your phone. You can move them back any time.</p>
+
+<h2>Location</h2>
+<p>If you search by place, the app asks your phone's built-in location service (Google on Android, Apple on iPhone) to turn photo locations into place names. Photo Cleaner does not send locations to its own server and does not track where you are.</p>
+
+<h2>What we don't collect</h2>
+<p>No accounts, no names or emails, no advertising, no analytics and no tracking. We do not sell or share any data.</p>
+
+<h2>Contact</h2>
+<p>Questions? Open an issue at <a href="https://github.com/KewlShrezhth/photo-cleaner/issues">github.com/KewlShrezhth/photo-cleaner</a>.</p>
+</body>
+</html>

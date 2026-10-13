@@ -14,7 +14,7 @@ export async function analyzePhotos(images: string[]): Promise<Analysis> {
   try {
     const res = await fetch(`${API_URL}/analyze`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-app-key': process.env.EXPO_PUBLIC_APP_KEY ?? '' },
       body: JSON.stringify({ images }),
       signal: abort.signal,
     });
@@ -28,7 +28,10 @@ export async function analyzePhotos(images: string[]): Promise<Analysis> {
     }
     return r;
   } catch (e: any) {
-    throw new Error(e?.name === 'AbortError' ? 'The server took too long. Try fewer photos.' : e?.message);
+    if (e?.name === 'AbortError') throw new Error('The server took too long. Try fewer photos.');
+    // fetch throws TypeError when the server can't be reached at all (offline, server down, blocked http)
+    if (e instanceof TypeError) throw new Error("Couldn't reach the Photo Cleaner server. Check your connection and try again.");
+    throw new Error(e?.message);
   } finally {
     clearTimeout(timer);
   }

@@ -19,16 +19,17 @@ import { isIOS, useTheme } from './src/theme';
 import { BottomBar, Button, Segmented, hasGlass } from './src/ui';
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import * as Haptics from 'expo-haptics';
-import { ensurePermission, loadByDate, loadByPlace, archivePhotos, toThumbnailBase64, Photo, MAX_PHOTOS } from './src/photos';
+import { ensurePermission, loadByDate, loadByPlace, loadRecent, archivePhotos, toThumbnailBase64, Photo, MAX_PHOTOS } from './src/photos';
 import { analyzePhotos, Analysis } from './src/api';
 import { samplePhotos, sampleAnalyze, sampleCount } from './src/samples';
+import { Welcome, welcomeSeen } from './src/welcome';
 import { EmptyState, ExtendedFab, OutlinedField, StatusChip, useNotice } from './src/m3';
 
 const GAP = 4;
 const COLS = 3;
 const SIZE = (Dimensions.get('window').width - GAP * (COLS + 1)) / COLS;
 
-type Mode = 'date' | 'place';
+type Mode = 'date' | 'place' | 'choose';
 type Group = { label: string; photos: Photo[]; keepIds: Set<string>; notes: Record<string, string> };
 type Result = { judged: boolean; groups: Group[]; leftovers: Photo[] };
 type Screen = 'pick' | 'working' | 'result';
@@ -153,6 +154,7 @@ export default function App() {
   const [demo, setDemo] = useState(false);
   const [notice, notify] = useNotice();
   const [workingCount, setWorkingCount] = useState(0);
+  const [welcomed, setWelcomed] = useState(welcomeSeen);
 
   function useSamples() {
     const found = samplePhotos();
@@ -168,11 +170,11 @@ export default function App() {
     }
     setBusy(true);
     try {
-      const found = mode === 'date' ? await loadByDate(from, to) : await loadByPlace(place);
+      const found = mode === 'date' ? await loadByDate(from, to) : mode === 'place' ? await loadByPlace(place) : await loadRecent();
       setDemo(false); // only once the sample photos are actually replaced
       setPhotos(found);
-      setSelected(new Set(found.map((p) => p.id)));
-      if (!found.length) notify('No photos found', 'Try a different date range or place');
+      setSelected(mode === 'choose' ? new Set() : new Set(found.map((p) => p.id))); // Choose starts empty: tap to pick
+      if (!found.length && mode !== 'choose') notify('No photos found', 'Try a different date range or place');
     } catch (e: any) {
       notify('Could not load photos', String(e?.message ?? e));
     } finally {
@@ -218,13 +220,10 @@ export default function App() {
     }
   }
 
-  // Nothing is ever deleted. Everything that is not a kept pick (the extra shots and the one-offs) goes to the Archive album.
+  // Nothing is ever deleted. Only the extra shots inside a situation go to the Archive album; one-offs stay put.
   async function archiveRest() {
     if (!result) return;
-    const ids = [
-      ...result.groups.flatMap((g) => g.photos.filter((p) => !g.keepIds.has(p.id)).map((p) => p.id)),
-      ...result.leftovers.map((p) => p.id),
-    ];
+    const ids = result.groups.flatMap((g) => g.photos.filter((p) => !g.keepIds.has(p.id)).map((p) => p.id));
     if (demo) {
       notify('Demo mode', 'Sample photos are not on your phone, so nothing was archived');
       return;
@@ -255,6 +254,8 @@ export default function App() {
     </Text>
   );
 
+  if (!welcomed) return <Welcome onDone={() => setWelcomed(true)} />;
+
   if (screen === 'working') {
     return (
       <SafeAreaView style={[styles.fill, styles.center, { backgroundColor: t.bg }]}>
@@ -276,7 +277,7 @@ export default function App() {
   if (screen === 'result' && result) {
     const { groups, leftovers } = result;
     const keepTotal = groups.reduce((n, g) => n + g.keepIds.size, 0);
-    const archiveCount = groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0) + leftovers.length;
+    const archiveCount = groups.reduce((n, g) => n + g.photos.length - g.keepIds.size, 0);
     const caps = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     const strip = (photos: Photo[], keepIds: Set<string> | null) => (
       <FlatList
@@ -291,7 +292,7 @@ export default function App() {
             <View style={{ opacity: keepIds && !kept ? 0.55 : 1 }}>
               <Image
                 source={{ uri: item.uri }}
-                accessibilityLabel={kept ? 'Kept photo' : keepIds ? 'Photo to archive' : 'One-off photo to archive'}
+                accessibilityLabel={kept ? 'Kept photo' : keepIds ? 'Photo to archive' : 'One-off photo, left as is'}
                 style={{ width: 92, height: 92, borderRadius: isIOS ? 12 : 12, borderWidth: kept ? 3 : 0, borderColor: t.keep }}
               />
               {kept && (
@@ -345,12 +346,10 @@ export default function App() {
           ListFooterComponent={
             leftovers.length
               ? card(
-                  'Archive',
-                  `${leftovers.length} one-off photo${leftovers.length === 1 ? '' : 's'}`,
+                  'One-offs',
+                  `${leftovers.length} photo${leftovers.length === 1 ? '' : 's'} · not touched`,
                   strip(leftovers, null),
-                  isIOS
-                    ? 'These match nothing else. They are added to an Archive album, nothing is deleted.'
-                    : 'These match nothing else. They are moved to an Archive album, nothing is deleted.'
+                  'These match nothing else, so they stay where they are.'
                 )
               : null
           }
@@ -390,6 +389,7 @@ export default function App() {
               options={[
                 { label: 'Date', value: 'date' as Mode },
                 { label: 'Place', value: 'place' as Mode },
+                { label: 'Choose', value: 'choose' as Mode },
               ]}
               value={mode}
               onChange={setMode}
@@ -410,7 +410,7 @@ export default function App() {
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.divider }} />
                 <DateField label="To" value={to} onChange={setTo} min={from} max={new Date()} />
               </View>
-            ) : !isIOS ? (
+            ) : mode === 'choose' ? null : !isIOS ? (
               <OutlinedField
                 label="City or place"
                 value={place}
@@ -435,13 +435,13 @@ export default function App() {
                 onSubmitEditing={search}
               />
             )}
-            <Button title={busy ? 'Searching…' : 'Find photos'} onPress={search} disabled={busy} />
+            <Button title={busy ? 'Searching…' : mode === 'choose' ? 'Show recent photos' : 'Find photos'} onPress={search} disabled={busy} />
             {__DEV__ && sampleCount > 0 && <Button title="Try with sample photos" tonal onPress={useSamples} />}
             {photos.length > 0 && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                 <Text style={{ color: t.subtext, flex: 1 }}>
                   {selected.size} of {photos.length} selected.{' '}
-                  {photos.length >= MAX_PHOTOS ? `Showing the ${MAX_PHOTOS} newest. ` : ''}Tap a photo to skip it.
+                  {photos.length >= MAX_PHOTOS ? `Showing the ${MAX_PHOTOS} newest. ` : ''}{mode === 'choose' ? 'Tap photos to pick them.' : 'Tap a photo to skip it.'}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -457,7 +457,7 @@ export default function App() {
             {photos.length === 0 && !isIOS && (
               <EmptyState
                 title="No photos yet"
-                body={`Choose a date range or a place, then tap Find photos.${__DEV__ && sampleCount > 0 ? ' You can also try the sample photos.' : ''}`}
+                body={`Find photos by date or place, or choose them yourself.${__DEV__ && sampleCount > 0 ? ' You can also try the sample photos.' : ''}`}
               />
             )}
           </View>

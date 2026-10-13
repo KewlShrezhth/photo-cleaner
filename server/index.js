@@ -64,10 +64,35 @@ async function run(images) {
   };
 }
 
+// shortcut: the key ships inside the app, so it stops casual use, not a determined attacker; add real accounts before scaling.
+const APP_KEY = process.env.APP_KEY;
+const hits = new Map(); // ip -> recent request times
+const LIMIT = 20; // requests per IP per 10 minutes, keeps a public demo cheap
+
+function limited(ip) {
+  const now = Date.now();
+  const recent = (hits.get(ip) ?? []).filter((t) => now - t < 600_000);
+  recent.push(now);
+  hits.set(ip, recent);
+  return recent.length > LIMIT;
+}
+
 http
   .createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200).end('ok'); // for the host's health check
+      return;
+    }
     if (req.method !== 'POST' || req.url !== '/analyze') {
       res.writeHead(404).end();
+      return;
+    }
+    if (APP_KEY && req.headers['x-app-key'] !== APP_KEY) {
+      res.writeHead(401).end('Unauthorized');
+      return;
+    }
+    if (limited(req.headers['x-forwarded-for']?.split(',')[0] ?? req.socket.remoteAddress)) {
+      res.writeHead(429).end('Too many requests, try again in a few minutes');
       return;
     }
     try {

@@ -1,4 +1,4 @@
-import * as MediaLibrary from 'expo-media-library/legacy';
+﻿import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Location from 'expo-location';
 import * as ImageManipulator from 'expo-image-manipulator';
 
@@ -49,6 +49,10 @@ export async function loadByDate(from: Date, to: Date): Promise<Photo[]> {
 export async function loadByPlace(query: string): Promise<Photo[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  // The phone's geocoder only turns photo GPS into place names once location access is allowed (approximate is enough).
+  if (!(await Location.requestForegroundPermissionsAsync()).granted) {
+    throw new Error('Allow location access to search by place');
+  }
   const page = await MediaLibrary.getAssetsAsync({
     mediaType: 'photo',
     sortBy: [[MediaLibrary.SortBy.creationTime, false]],
@@ -79,6 +83,16 @@ export async function loadByPlace(query: string): Promise<Photo[]> {
     }
   }
   return found;
+}
+
+// For hand-picking in the app's own grid. The system picker returns copies without library ids, so they couldn't be archived.
+export async function loadRecent(): Promise<Photo[]> {
+  const page = await MediaLibrary.getAssetsAsync({
+    mediaType: 'photo',
+    sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+    first: MAX_PHOTOS,
+  });
+  return page.assets.map((a) => ({ id: a.id, uri: a.uri, created: toMs(a.creationTime) || toMs(a.modificationTime) }));
 }
 
 export async function toThumbnailBase64(uri: string): Promise<string> {
